@@ -1,0 +1,300 @@
+---
+title: "VOCs interactive maps"
+author: "Sara Zapata Marin"
+date: "7/5/2021"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 2
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(leaflet)
+library(raster)
+library(tidyverse)
+library(viridis)
+
+rasters_path <- "grid_250m"
+getwd()
+```
+
+# Introduction
+
+This R Markdown document contains the predicted surfaces for benzene, decane, ethylbenzene, hexane, and 1,2,4-trimethylbenzene for the December 2005, April 2006, and August 2006 monitoring campaigns.
+
+For a more flexible comparison, the report is divided into two sections. The first part is arranged by VOC, you can overlay each campaign on top of each other. The second part is arranged by monitoring campaign, meaning you can overlay the layer of each VOC predicted surface on top of each other for each campaign.
+
+# By VOC
+
+## Benzene
+
+```{r load benzene, echo = FALSE}
+
+dec_benzene <- raster( file.path(rasters_path,"benzene_mean_december_250m.tif")) %>%
+  projectRaster( crs = "+proj=longlat +datum=WGS84")
+
+apr_benzene <- raster( file.path(rasters_path,"benzene_mean_april_250m.tif")) %>%
+  projectRaster( crs = "+proj=longlat +datum=WGS84")
+
+aug_benzene <- raster(
+  file.path(rasters_path,"benzene_mean_august_250m.tif")) %>%
+  projectRaster( crs = "+proj=longlat +datum=WGS84")
+
+pal <- colorNumeric("viridis", rbind(values(dec_benzene), values(apr_benzene), values(aug_benzene)), na.color = "transparent")
+```
+
+```{r plot benzene, warning=FALSE, echo=FALSE}
+
+leaflet() %>% # Base group: OpenStreetMap map tiles
+  addTiles() %>%
+  # Overlay groups
+    addRasterImage(dec_benzene, colors = pal, opacity = 0.8, project = FALSE, group ="December") %>%
+  addRasterImage(apr_benzene, colors = pal, opacity = 0.8, project = FALSE, group =  "April") %>%
+  addRasterImage(aug_benzene, colors = pal, opacity = 0.8, project = FALSE, group =  "August") %>%
+  # Layers control
+  addLayersControl(
+    overlayGroups = c("December", "April", "August"),
+    options = layersControlOptions(collapsed = FALSE)
+  )%>%
+  addLegend(pal = pal, values = rbind(values(dec_benzene), values(apr_benzene), values(aug_benzene)),
+            title = "Benzene concentration log")
+
+
+```
+
+## Decane
+
+```{r load decane, echo = FALSE}
+
+dec_decane <- raster(
+  file.path(rasters_path,"decane_mean_december_250m.tif")) %>%
+  projectRaster( crs = "+proj=longlat +datum=WGS84")
+
+apr_decane <- raster(
+  file.path(rasters_path, "decane_mean_april_250m.tif")) %>%
+  projectRaster( crs = "+proj=longlat +datum=WGS84")
+
+aug_decane <- raster(
+  file.path(rasters_path,"decane_mean_august_250m.tif")) %>%
+  projectRaster( crs = "+proj=longlat +datum=WGS84")
+
+pal <- colorNumeric("viridis", rbind(values(dec_decane), values(apr_decane), values(aug_decane)), na.color = "transparent")
+```
+
+```{r plot decane, warning=FALSE, echo=FALSE}
+
+ leaflet() %>% # Base group: OpenStreetMap map tiles
+  addTiles() %>%
+  # Overlay groups
+    addRasterImage(dec_decane, colors = pal, opacity = 0.8, project = FALSE, group ="December") %>%
+  addRasterImage(apr_decane, colors = pal, opacity = 0.8, project = FALSE, group =  "April") %>%
+  addRasterImage(aug_decane, colors = pal, opacity = 0.8, project = FALSE, group =  "August") %>%
+  # Layers control
+  addLayersControl(
+    overlayGroups = c("December", "April", "August"),
+    options = layersControlOptions(collapsed = FALSE)
+  )%>%
+  addLegend(pal = pal, values = rbind(values(dec_decane), values(apr_decane), values(aug_decane)),
+            title = "Decane concentration log")
+
+
+```
+
+## Ethylbenzene
+
+```{r load ethyl, echo = FALSE}
+
+dec_ethyl <- raster(
+  file.path(rasters_path,"ethyl_mean_december_250m.tif")) %>%
+  projectRaster( crs = "+proj=longlat +datum=WGS84")
+
+apr_ethyl <- raster(
+  file.path(rasters_path,"ethyl_mean_april_250m.tif")) %>%
+  projectRaster( crs = "+proj=longlat +datum=WGS84")
+
+aug_ethyl <- raster(
+  file.path(rasters_path,"ethyl_mean_august_250m.tif")) %>%
+  projectRaster( crs = "+proj=longlat +datum=WGS84")
+
+pal <- colorNumeric("viridis", rbind(values(dec_ethyl), values(apr_ethyl), values(aug_ethyl)), na.color = "transparent")
+```
+
+```{r plot ethyl, warning=FALSE, echo=FALSE}
+
+leaflet() %>% # Base group: OpenStreetMap map tiles
+  addTiles() %>%
+  # Overlay groups
+    addRasterImage(dec_ethyl, colors = pal, opacity = 0.8, project = FALSE, group ="December") %>%
+  addRasterImage(apr_ethyl, colors = pal, opacity = 0.8, project = FALSE, group =  "April") %>%
+  addRasterImage(aug_ethyl, colors = pal, opacity = 0.8, project = FALSE, group =  "August") %>%
+  # Layers control
+  addLayersControl(
+    overlayGroups = c("December", "April", "August"),
+    options = layersControlOptions(collapsed = FALSE)
+  )%>%
+  addLegend(pal = pal, values = rbind(values(dec_ethyl), values(apr_ethyl), values(aug_ethyl)),
+            title = "Ethylbenzene concentration log")
+
+```
+
+## Hexane
+
+```{r load hexane, echo = FALSE}
+
+dec_hexane <- raster(
+  file.path(rasters_path,"hexane_mean_december_250m.tif")) %>%
+  projectRaster( crs = "+proj=longlat +datum=WGS84")
+
+apr_hexane <- raster(
+  file.path(rasters_path,"hexane_mean_april_250m.tif")) %>%
+  projectRaster( crs = "+proj=longlat +datum=WGS84")
+
+aug_hexane <- raster(
+  file.path(rasters_path,"hexane_mean_august_250m.tif")) %>%
+  projectRaster( crs = "+proj=longlat +datum=WGS84")
+
+pal <- colorNumeric("viridis", rbind(values(dec_hexane), values(apr_hexane), values(aug_hexane)), na.color = "transparent")
+```
+
+```{r plot hexane, warning=FALSE, echo=FALSE}
+
+leaflet() %>% # Base group: OpenStreetMap map tiles
+  addTiles() %>%
+  # Overlay groups
+    addRasterImage(dec_hexane, colors = pal, opacity = 0.8, project = FALSE, group ="December") %>%
+  addRasterImage(apr_hexane, colors = pal, opacity = 0.8, project = FALSE, group =  "April") %>%
+  addRasterImage(aug_hexane, colors = pal, opacity = 0.8, project = FALSE, group =  "August") %>%
+  # Layers control
+  addLayersControl(
+    overlayGroups = c("December", "April", "August"),
+    options = layersControlOptions(collapsed = FALSE)
+  )%>%
+  addLegend(pal = pal, values = rbind(values(dec_hexane), values(apr_hexane), values(aug_hexane)),
+            title = "Hexane concentration log")
+
+
+```
+
+## 1,2,4-Trimethylbenzene
+
+```{r load tmb, echo = FALSE}
+
+dec_tmb <- raster(
+  file.path(rasters_path,"tmb_mean_december_250m.tif")) %>%
+  projectRaster( crs = "+proj=longlat +datum=WGS84")
+
+apr_tmb <- raster(
+  file.path(rasters_path,"tmb_mean_april_250m.tif")) %>%
+  projectRaster( crs = "+proj=longlat +datum=WGS84")
+
+aug_tmb <- raster(
+  file.path(rasters_path,"tmb_mean_august_250m.tif")) %>%
+  projectRaster( crs = "+proj=longlat +datum=WGS84")
+
+pal <- colorNumeric("viridis", rbind(values(dec_tmb), values(apr_tmb), values(aug_tmb)), na.color = "transparent")
+
+```
+
+```{r plot tmb, warning=FALSE, echo=FALSE}
+
+leaflet() %>% # Base group: OpenStreetMap map tiles
+  addTiles() %>%
+  # Overlay groups
+    addRasterImage(dec_tmb, colors = pal, opacity = 0.8, project = FALSE, group ="December") %>%
+  addRasterImage(apr_tmb, colors = pal, opacity = 0.8, project = FALSE, group =  "April") %>%
+  addRasterImage(aug_tmb, colors = pal, opacity = 0.8, project = FALSE, group =  "August") %>%
+  # Layers control
+  addLayersControl(
+    overlayGroups = c("December", "April", "August"),
+    options = layersControlOptions(collapsed = FALSE)
+  )%>%
+  addLegend(pal = pal, values = rbind(values(dec_tmb), values(apr_tmb), values(aug_tmb)),
+            title = "1,2,4-Tmb concentration log")
+
+
+```
+
+# By campaign
+
+## December 2005
+
+```{r plot december, warning=FALSE, echo=FALSE}
+
+pal <-colorNumeric("viridis", rbind(values(dec_benzene), values(dec_decane), values(dec_ethyl), values(dec_hexane),
+values(dec_tmb)), na.color = "transparent")
+
+leaflet() %>% # Base group: OpenStreetMap map tiles
+  addTiles() %>%
+  # Overlay groups
+    addRasterImage(dec_benzene, colors = pal, opacity = 0.8, project = FALSE, group ="Benzene") %>%
+  addRasterImage(dec_decane, colors = pal, opacity = 0.8, project = FALSE, group =  "Decane") %>%
+  addRasterImage(dec_ethyl, colors = pal, opacity = 0.8, project = FALSE, group =  "Ethylbenzene") %>%
+   addRasterImage(dec_hexane, colors = pal, opacity = 0.8, project = FALSE, group =  "Hexane") %>%
+   addRasterImage(dec_tmb, colors = pal, opacity = 0.8, project = FALSE, group =  "1,2,4-Trimethylbenzene") %>%
+  # Layers control
+  addLayersControl(
+    overlayGroups = c("Benzene", "Decane", "Ethylbenzene", "Hexane", "1,2,4-Trimethylbenzene"),
+    options = layersControlOptions(collapsed = FALSE)
+  )%>%
+  addLegend(pal = pal, values = rbind(values(dec_benzene), values(dec_decane), values(dec_ethyl), values(dec_hexane),
+values(dec_tmb)),
+            title = "December 2005")
+
+
+```
+
+## April 2006
+
+```{r plot april, warning=FALSE, echo=FALSE}
+
+pal <-colorNumeric("viridis", rbind(values(apr_benzene), values(apr_decane), values(apr_ethyl), values(apr_hexane),
+values(apr_tmb)), na.color = "transparent")
+
+leaflet() %>% # Base group: OpenStreetMap map tiles
+  addTiles() %>%
+  # Overlay groups
+    addRasterImage(apr_benzene, colors = pal, opacity = 0.8, project = FALSE, group ="Benzene") %>%
+  addRasterImage(apr_decane, colors = pal, opacity = 0.8, project = FALSE, group =  "Decane") %>%
+  addRasterImage(apr_ethyl, colors = pal, opacity = 0.8, project = FALSE, group =  "Ethylbenzene") %>%
+   addRasterImage(apr_hexane, colors = pal, opacity = 0.8, project = FALSE, group =  "Hexane") %>%
+   addRasterImage(apr_tmb, colors = pal, opacity = 0.8, project = FALSE, group =  "1,2,4-Trimethylbenzene") %>%
+  # Layers control
+  addLayersControl(
+    overlayGroups = c("Benzene", "Decane", "Ethylbenzene", "Hexane", "1,2,4-Trimethylbenzene"),
+    options = layersControlOptions(collapsed = FALSE)
+  )%>%
+  addLegend(pal = pal, values = rbind(values(apr_benzene), values(apr_decane), values(apr_ethyl), values(apr_hexane),
+values(apr_tmb)),
+            title = "April 2006")
+
+
+```
+
+## August 2006
+
+```{r plot august, warning=FALSE, echo=FALSE}
+
+pal <-colorNumeric("viridis", rbind(values(aug_benzene), values(aug_decane), values(aug_ethyl), values(aug_hexane),
+values(aug_tmb)), na.color = "transparent")
+
+leaflet() %>% # Base group: OpenStreetMap map tiles
+  addTiles() %>%
+  # Overlay groups
+    addRasterImage(aug_benzene, colors = pal, opacity = 0.8, project = FALSE, group ="Benzene") %>%
+  addRasterImage(aug_decane, colors = pal, opacity = 0.8, project = FALSE, group =  "Decane") %>%
+  addRasterImage(aug_ethyl, colors = pal, opacity = 0.8, project = FALSE, group =  "Ethylbenzene") %>%
+   addRasterImage(aug_hexane, colors = pal, opacity = 0.8, project = FALSE, group =  "Hexane") %>%
+   addRasterImage(aug_tmb, colors = pal, opacity = 0.8, project = FALSE, group =  "1,2,4-Trimethylbenzene") %>%
+  # Layers control
+  addLayersControl(
+    overlayGroups = c("Benzene", "Decane", "Ethylbenzene", "Hexane", "1,2,4-Trimethylbenzene"),
+    options = layersControlOptions(collapsed = FALSE)
+  )%>%
+  addLegend(pal = pal, values = rbind(values(aug_benzene), values(aug_decane), values(aug_ethyl), values(aug_hexane),
+values(aug_tmb)),
+            title = "August 2006")
+
+
+```
