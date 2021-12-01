@@ -1,16 +1,14 @@
 library(bayesplot)
-library(corrplot)
-library(ggcorrplot)
+library(coda)
 library(grid)
 library(gridExtra)
-library(glmnet)
 library(mvtnorm)
 library(nimble)
-library(tidyverse)
 library(sf)
-library(rgdal)
+library(tidyverse)
 
 # Functions -----
+set.seed(123)
 
 ditch_the_axes <- theme(
   axis.text = element_blank(),
@@ -22,78 +20,82 @@ ditch_the_axes <- theme(
 
 # Load data -----
 
-set.seed(123)
-
 predictors <- read.csv("data/all_campaigns_predictors.csv") 
 gas_vocs <- read.csv("data/gasoline_vocs.csv")
 
 # Data processing -----
 
-benzene_data <- gas_vocs %>% filter(type == "Benzene") %>% 
+decane_data <- gas_vocs %>% filter(type == "nDecane") %>% 
   mutate(log_concentration = log(concentration)) %>% 
   select(c("ID",  "X_km", "Y_km", "campaign", "log_concentration")) %>%  
   spread(key = "campaign", value = "log_concentration") %>% 
   select( "ID", "X_km", "Y_km", "Dec 2005", "Apr 2006", "Aug 2006") %>% 
   na.omit()
 
-voc_predictors <- merge(benzene_data,
-                        predictors, by = "ID")
+
+voc_predictors <- merge(decane_data,
+                           predictors, by = "ID")
 
 # If the predictor is missing it means it is a zero
 # Note: there are no missing values in the voc data
 
 voc_predictors[is.na(voc_predictors)] <- 0
 
+# Decane predictors ----
 
-# Benzene predictors ----
+decane_predictors <- decane_predictors %>% select("ID", "X_km", "Y_km", 
+                                                      "Dec 2005","Apr 2006", 
+                                                      "Aug 2006", 
+                                                      "Av_NOx_50m",
+                                                      "Av_NOx_200m",
+                                                      "Av_NOx_500m",
+                                                      "Av_NOx_1000m",
+                                                      "Building_50m",
+                                                      "Building_100m",
+                                                      "Building_200m",
+                                                      "Building_500m",
+                                                      "Commercial_1000m",
+                                                      "Government.and.Institutional_200m",
+                                                      "Government.and.Institutional_500m",
+                                                      "Residential_50m",
+                                                      "Residential_1000m",
+                                                      "Roads_50m",
+                                                      "Roads_100m",
+                                                      "Roads_200m",
+                                                      "Open.Area_100m",
+                                                      "Pop_500m",
+                                                      "Pop_1000m",
+                                                      "Resource.and.Industrial_500m",
+                                                      "Resource.and.Industrial_1000m",
+                                                      "Waterbody_1000m")
 
-benzene_predictors <- voc_predictors %>% select( "ID", "X_km", "Y_km", 
-                                                    "Dec 2005",
-                                                    "Apr 2006", 
-                                                    "Aug 2006", 
-                                                    "Building_50m",
-                                                    "Building_200m",
-                                                    "Building_1000m", 
-                                                    "Resource.and.Industrial_1000m",
-                                                    "Pop_50m",
-                                                    "Pop_500m",
-                                                    "Pop_1000m",
-                                                    "Residential_50m",
-                                                    "Residential_200m",
-                                                    "Av_NOx_500m",
-                                                    "Av_NOx_1000m",
-                                                    "Open.Area_100m")
+decane_predictors[,c("X_km", "Y_km")] <- scale(decane_predictors[,c("X_km", "Y_km")])
 
+campaigns_indx <- which(colnames(benzene_predictors) %in% c("ID","Dec 2005", "Apr 2006", "Aug 2006"))
+decane_predictors[,-campaigns_indx] <- scale(decane_predictors[,-campaigns_indx])
 
 # Calculate distance matrix in km
 
-dist_matrix <-  dist(benzene_predictors[,c("X_km", "Y_km")]) %>% as.matrix()
+dist_matrix <- dist(decane_data[c("X_km", "Y_km")]) %>% as.matrix()
 
-# Scale predictors only
+# Define variables for program -----
 
-campaigns_indx <- which(colnames(benzene_predictors) %in% c("ID","Dec 2005", "Apr 2006", "Aug 2006"))
-
-benzene_predictors[,-campaigns_indx] <- scale(benzene_predictors[,-campaigns_indx])
-
-# Prepare data for models
-
-Nsites <- nrow(benzene_predictors)
+Nsites <- nrow(final_predictors_vocs)
 
 ones <- rep(1,Nsites) %>% as.data.frame()
-
-# Dummy variable for between campaigns variability
-
 D1 <- c(0,1,0)
 D2 <- c(0,0,1)
-D <- data.frame(D1, D2 ) %>% as.matrix()
 
-covs <- data.frame(ones, benzene_predictors[,-campaigns_indx])
+covs <- data.frame(ones, decane_predictors[,-campaigns_indx])
+
+D <- data.frame(D1 , D2) %>% as.matrix()
 
 
-# Model 1 -----
+# Model 1 ------
 
 model1 <- nimbleCode(
   {
+    
     for(i in 1:(Nsites-1)){
       for(j in (i+1):Nsites){
         for(k in 1:Ngroups){
@@ -106,15 +108,15 @@ model1 <- nimbleCode(
     for(i in 1:Nsites){
       for(k in 1:Ngroups){
         C[k,i,i] <- sigma2[k] + tau2
-        
       }
     }
     
     for(i in 1:Ngroups){
-      mu[,i] <- rep(dummy[i,]%*%alpha[1:(Ngroups-1)], Nsites) + covs[,1:p]%*%beta[1:p] 
+      mu[,i] <-  rep(dummy[i,]%*%alpha[1:(Ngroups-1)], Nsites) + covs[,1:p]%*%beta[1:p] 
       y[,i] ~ dmnorm(mu[,i], cov = C[i,,])
       fitted[,i]~ dmnorm(mu[,i], cov = C[i,,])
     }
+    
     
     # Priors
     for(k in 1:p){
@@ -125,14 +127,16 @@ model1 <- nimbleCode(
       alpha[j] ~ dnorm(0, sd = 10)
     }
     
-    for(i in 1:Ngroups){
-      sigma2[i] ~ dinvgamma(2,1)
-      phi[i] ~ dunif(0, 45.3)
+    for(h in 1:Ngroups){
+      sigma2[h] ~ dinvgamma(2,1)
+      phi[h] ~ dexp(0.3)
+      
     }
     
     tau2 ~ dinvgamma(2,1)
     
   })
+
 
 spatialCodeinits <-list("alpha" = rnorm(2), "beta" = rnorm(ncol(covs)), 
                         "phi" = rexp(3,0.3), 
@@ -140,18 +144,16 @@ spatialCodeinits <-list("alpha" = rnorm(2), "beta" = rnorm(ncol(covs)),
                         "sigma2" = rinvgamma(3,2,1))
 
 
-model <- nimbleModel(model1, 
-                     data = list(y = benzene_predictors[,4:6] %>% as.matrix(), 
-                                 covs = covs %>% as.matrix(),
-                                 dist_matrix = dist_matrix,
-                                 dummy = D),
-                     constants = list(Nsites = nrow(benzene_predictors), 
-                                      Ngroups = 3,
-                                      p = ncol(covs)), 
-                     dimensions = list(mu = c(nrow(benzene_predictors),3),
-                                       C = c(3,nrow(benzene_predictors), 
-                                             nrow(benzene_predictors)),
-                                       fitted = c(nrow(benzene_predictors),3)),
+model <- nimbleModel(model1, data = list(y = final_predictors_vocs[,4:6] %>% as.matrix(), 
+                                                   covs = covs %>% as.matrix(),
+                                                   dist_matrix = decane_dist,
+                                                   dummy = D),
+                     constants = list( Nsites = Nsites, 
+                                       Ngroups = 3,
+                                       p = ncol(covs)), 
+                     dimensions = list(mu = c(Nsites,3),
+                                       C = c(3,Nsites, Nsites),
+                                       fitted = c(nrow(final_predictors_vocs),3)),
                      inits = spatialCodeinits)
 
 Cmodel <- compileNimble(model)
@@ -161,18 +163,17 @@ start_time <- Sys.time()
 mcmcConf <- configureMCMC(Cmodel,
                           monitors = c("alpha","beta", 
                                        "tau2", "phi", 
-                                       "sigma2", "fitted" ))
-
+                                       "sigma2", "fitted"))
 
 modelMCMC <- buildMCMC(mcmcConf,
                        enableWAIC = TRUE)
 
 CmodelMCMC <- compileNimble(modelMCMC, project = model)
 
-
-mcmc.out <- runMCMC(CmodelMCMC, niter = 30000,
-                    nburnin = 3000, thin = 14, nchains = 2,
+mcmc.out <- runMCMC(CmodelMCMC, niter = 20000,
+                    nburnin = 1000, thin = 14, nchains = 2,
                     summary = TRUE, inits = spatialCodeinits, WAIC = TRUE)
+
 end_time <- Sys.time()
 end_time - start_time
 
@@ -182,7 +183,7 @@ coda_sample_1 <- coda::mcmc(mcmc.out$samples$chain1)
 coda_sample_2 <- coda::mcmc(mcmc.out$samples$chain2) 
 coda_sample <- coda::mcmc.list(coda_sample_1, coda_sample_2)
 
-n <- ncol(coda_sample_1) 
+n <- ncol(coda_sample_1) #numero de parametros
 
 Rhat_all <-  sapply(1:n, function(x) {
   rstan::Rhat(cbind(coda_sample_1[, x], coda_sample_2[, x]))
@@ -199,6 +200,7 @@ ess_all_tail <- sapply(1:n, function(x) {
 max(Rhat_all)
 min(ess_all)
 min(ess_all_tail)
+
 
 # Model 2 -----
 
@@ -226,30 +228,26 @@ model2 <- nimbleCode(
     
   })
 
-spatialCodeinits <-list("alpha" = rnorm(2), "beta" = rnorm(ncol(covs)), 
+spatialCodeinits <-list("beta" = rnorm(ncol(covs)), 
                         "tau2" = rinvgamma(1,2,1))
 
 
-model <- nimbleModel(model2, 
-                     data = list(y = benzene_predictors[,4:6] %>% as.matrix(), 
-                                 covs = covs %>% as.matrix(),
-                                 dummy = D),
-                     constants = list(Nsites = nrow(benzene_predictors), 
-                                      Ngroups = 3,
-                                      p = ncol(covs)), 
-                     dimensions = list(mu = c(nrow(benzene_predictors),3),
-                                       C = c(3,nrow(benzene_predictors), 
-                                             nrow(benzene_predictors)),
-                                       fitted = c(nrow(benzene_predictors),3)),
+model <- nimbleModel(model2, data = list(y = final_predictors_vocs[,4:6] %>% as.matrix(), 
+                                                    covs = covs %>% as.matrix(),
+                                                    dummy = D),
+                     constants = list( Nsites = Nsites, 
+                                       Ngroups = 3,
+                                       p = ncol(covs)), 
+                     dimensions = list(mu = c(Nsites,3),
+                                       C = c(3,Nsites, Nsites),
+                                       fitted = c(nrow(final_predictors_vocs),3)),
                      inits = spatialCodeinits)
 
 Cmodel <- compileNimble(model)
 
 start_time <- Sys.time()
 
-mcmcConf <- configureMCMC(Cmodel,
-                          monitors = c("alpha","beta", 
-                                       "tau2", "fitted" ))
+mcmcConf <- configureMCMC(Cmodel)
 
 
 modelMCMC <- buildMCMC(mcmcConf,
@@ -257,20 +255,19 @@ modelMCMC <- buildMCMC(mcmcConf,
 
 CmodelMCMC <- compileNimble(modelMCMC, project = model)
 
-
-mcmc.out2 <- runMCMC(CmodelMCMC, niter = 30000,
-                     nburnin = 3000, thin = 14, nchains = 2,
+mcmc.out2 <- runMCMC(CmodelMCMC, niter = 20000,
+                     nburnin = 2000, thin = 14, nchains = 2,
                      summary = TRUE, inits = spatialCodeinits, WAIC = TRUE)
 end_time <- Sys.time()
 end_time - start_time
 
-# Check convergence
+# Check convergence 
 
 coda_sample_1 <- coda::mcmc(mcmc.out2$samples$chain1) 
 coda_sample_2 <- coda::mcmc(mcmc.out2$samples$chain2) 
 coda_sample <- coda::mcmc.list(coda_sample_1, coda_sample_2)
 
-n <- ncol(coda_sample_1) 
+n <- ncol(coda_sample_1) #numero de parametros
 
 Rhat_all <-  sapply(1:n, function(x) {
   rstan::Rhat(cbind(coda_sample_1[, x], coda_sample_2[, x]))
@@ -289,6 +286,7 @@ min(ess_all)
 min(ess_all_tail)
 
 # Model 3 -----
+
 
 model3 <- nimbleCode(
   {
@@ -326,7 +324,7 @@ model3 <- nimbleCode(
     
     for(i in 1:Ngroups){
       sigma2[i] ~ dinvgamma(2,1)
-      phi[i] ~ dexp(0.3)
+      phi[i] ~ dexp(0.1)
     }
     
     tau2 ~ dinvgamma(2,1)
@@ -334,22 +332,21 @@ model3 <- nimbleCode(
     
   })
 
-spatialCodeinits <-list( "beta" = rnorm(ncol(covs)), "phi" = rexp(3,0.3), 
-                         "tau2" = rinvgamma(1,2,1),
-                         "sigma2" = rinvgamma(3,2,1), "psi2" = rinvgamma(1,2,1))
+spatialCodeinits <-list("beta" = rnorm(ncol(covs)), 
+                        "phi" = rexp(3,0.3), 
+                        "tau2" = rinvgamma(1,2,1),
+                        "sigma2" = rinvgamma(3,2,1))
 
 
-model <- nimbleModel(model3, 
-                     data = list(y = benzene_predictors[,4:6] %>% as.matrix(), 
-                                 covs = covs %>% as.matrix(),
-                                 dist_matrix = dist_matrix),
-                     constants = list(Nsites = nrow(benzene_predictors), 
-                                      Ngroups = 3,
-                                      p = ncol(covs)), 
-                     dimensions = list(mu = c(nrow(benzene_predictors),3),
-                                       C = c(3,nrow(benzene_predictors), 
-                                             nrow(benzene_predictors)),
-                                       fitted = c(nrow(benzene_predictors),3)),
+model <- nimbleModel(model3, data = list(y = final_predictors_vocs[,4:6] %>% as.matrix(), 
+                                                    covs = covs %>% as.matrix(),
+                                                    dist_matrix = decane_dist),
+                     constants = list( Nsites = Nsites, 
+                                       Ngroups = 3,
+                                       p = ncol(covs)), 
+                     dimensions = list(mu = c(Nsites,3),
+                                       C = c(3,Nsites, Nsites),
+                                       fitted = c(nrow(final_predictors_vocs),3)),
                      inits = spatialCodeinits)
 
 Cmodel <- compileNimble(model)
@@ -367,19 +364,17 @@ modelMCMC <- buildMCMC(mcmcConf,
 
 CmodelMCMC <- compileNimble(modelMCMC, project = model)
 
-mcmc.out3 <- runMCMC(CmodelMCMC, niter = 30000,
-                     nburnin = 3000, thin = 5, nchains = 2,
+mcmc.out3 <- runMCMC(CmodelMCMC, niter = 20000,
+                     nburnin = 2000, thin = 14, nchains = 2,
                      summary = TRUE, inits = spatialCodeinits, WAIC = TRUE)
 end_time <- Sys.time()
 end_time - start_time
-
-# Check convergence 
 
 coda_sample_1 <- coda::mcmc(mcmc.out3$samples$chain1) 
 coda_sample_2 <- coda::mcmc(mcmc.out3$samples$chain2) 
 coda_sample <- coda::mcmc.list(coda_sample_1, coda_sample_2)
 
-n <- ncol(coda_sample_1) 
+n <- ncol(coda_sample_1) #numero de parametros
 
 Rhat_all <-  sapply(1:n, function(x) {
   rstan::Rhat(cbind(coda_sample_1[, x], coda_sample_2[, x]))
@@ -417,15 +412,12 @@ model4 <- nimbleCode(
       }
     }
     
-    
-    
     tau2 ~ dinvgamma(2,1)
     psi2 ~ dinvgamma(2,1)
     
   })
 
-spatialCodeinits <-list(  "beta" = rnorm(ncol(covs)), 
-                          "tau2" = rinvgamma(1,2,1))
+spatialCodeinits <-list("beta" = rnorm(ncol(covs)),"tau2" = rinvgamma(1,2,1))
 
 
 model <- nimbleModel(model4, 
@@ -448,24 +440,25 @@ mcmcConf <- configureMCMC(Cmodel,
                           monitors = c("beta", "gamma", 
                                        "tau2", "fitted" ))
 
+
 modelMCMC <- buildMCMC(mcmcConf,
                        enableWAIC = TRUE)
 
 CmodelMCMC <- compileNimble(modelMCMC, project = model)
 
-mcmc.out4 <- runMCMC(CmodelMCMC, niter = 30000,
-                     nburnin = 3000, thin = 20, nchains = 2,
+mcmc.out4 <- runMCMC(CmodelMCMC, niter = 20000,
+                     nburnin = 2000, thin = 5, nchains = 2,
                      summary = TRUE, inits = spatialCodeinits, WAIC = TRUE)
 end_time <- Sys.time()
 end_time - start_time
 
-# Check convergence 
+# Check convergence
 
-coda_sample_1 <- coda::mcmc(mcmc.out$samples$chain1) 
-coda_sample_2 <- coda::mcmc(mcmc.out$samples$chain2) 
+coda_sample_1 <- coda::mcmc(mcmc.out4$samples$chain1) 
+coda_sample_2 <- coda::mcmc(mcmc.out4$samples$chain2) 
 coda_sample <- coda::mcmc.list(coda_sample_1, coda_sample_2)
 
-n <- ncol(coda_sample_1) 
+n <- ncol(coda_sample_1) #numero de parametros
 
 Rhat_all <-  sapply(1:n, function(x) {
   rstan::Rhat(cbind(coda_sample_1[, x], coda_sample_2[, x]))
@@ -490,8 +483,8 @@ mcmc.out2$WAIC
 mcmc.out3$WAIC
 mcmc.out4$WAIC
 
-
 # Plot chains best model ----
+
 par(mfrow=c(2,1))
 
 plot(mcmc.out$samples$chain1[ , 'alpha[1]'], type = 'l', xlab = 'iteration', 
@@ -553,8 +546,8 @@ plot(mcmc.out$samples$chain1[ , 'phi[3]'], type = 'l', xlab = 'iteration',
 lines(mcmc.out$samples$chain2[ , 'phi[3]'], col = "red")
 
 
-# Summary of the parameters -----
 
+# Summary of the parameters -----
 varnames <- c("alpha[1]", "alpha[2]", 
               "beta[1]", "tau2",
               "phi[1]", "phi[2]","phi[3]",
@@ -578,9 +571,9 @@ summary_fitted_dec <- mcmc.out$summary$all.chains[grepl("fitted.*, 1\\]" , rowna
 summary_fitted_apr <- mcmc.out$summary$all.chains[grepl("fitted.*, 2\\]" , rownames(mcmc.out$summary$all.chains)),] %>% as.data.frame()
 summary_fitted_aug <- mcmc.out$summary$all.chains[grepl("fitted.*, 3\\]" , rownames(mcmc.out$summary$all.chains)),] %>% as.data.frame()
 
-true_dec <- as.vector(benzene_predictors[,4])
-true_apr <- as.vector(benzene_predictors[,5])
-true_aug <- as.vector(benzene_predictors[,6])
+true_dec <- as.vector(final_predictors_vocs[,4])
+true_apr <- as.vector(final_predictors_vocs[,5])
+true_aug <- as.vector(final_predictors_vocs[,6])
 
 names(true_dec)[1] <- "real"
 names(true_apr)[1] <- "real"
@@ -599,7 +592,7 @@ plot_dec <- ggplot(data = fitted_real_dec) +
         panel.grid.minor = element_blank(),
         panel.border = element_blank(),
         panel.background = element_blank(),
-        axis.line.y.right = NULL) + xlim(c(-1,1.6)) + ylim(c(-1,1.6)) + 
+        axis.line.y.right = NULL) + xlim(c(-1.5,1.6)) + ylim(c(-1.5,1.6)) + 
   geom_abline(slope=1, intercept = 0) + ylab("fitted") + xlab("observed")+ 
   ggtitle("December 2005")
 
@@ -611,7 +604,7 @@ plot_april <- ggplot(data = fitted_real_apr) +
         panel.grid.minor = element_blank(),
         panel.border = element_blank(),
         panel.background = element_blank(),
-        axis.line.y.right = NULL)  + xlim(c(-1,2)) + ylim(c(-1,2)) + 
+        axis.line.y.right = NULL)  + xlim(c(-0.5,2)) + ylim(c(-0.5,2)) + 
   geom_abline(slope=1, intercept = 0) + ylab("fitted") + xlab("observed")+ 
   ggtitle("April 2006")
 
@@ -623,14 +616,16 @@ plot_august <- ggplot(data = fitted_real_aug) +
         panel.grid.minor = element_blank(),
         panel.border = element_blank(),
         panel.background = element_blank(),
-        axis.line.y.right = NULL) + xlim(c(-2,1.2)) + ylim(c(-2,1.2)) + 
+        axis.line.y.right = NULL) + xlim(c(-2.2,1.5)) + ylim(c(-2.2,1.5)) + 
   geom_abline(slope=1, intercept = 0) + ylab("fitted") + xlab("observed")+ 
   ggtitle("August 2006")
 
 
-grid.arrange(plot_dec, plot_april, plot_august,  nrow = 1)
 
-# Residual analysis -----
+
+grid.arrange(plot_dec, plot_april, plot_august, nrow = 1)
+
+# Residual analysis ----
 
 res_dec <- true_dec - summary_fitted_dec$Mean
 res_apr <- true_apr - summary_fitted_apr$Mean
